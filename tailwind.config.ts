@@ -9,6 +9,7 @@ const config: Config = {
     extend: {
       colors: {
         milky: "#F9F8F3",
+        sand: "#E8DFD0",
         "slate-dark": "#2C2E31",
         accent: "#C45C3E",
       },

@@ -2,8 +2,10 @@ import Image from "next/image";
 
 export default function Home() {
   return (
-    <main className="max-w-prose mx-auto px-4 py-8 md:py-12">
-      <article className="text-lg leading-relaxed space-y-6 [&_h1]:text-3xl [&_h1]:font-semibold [&_h1]:leading-tight [&_h1]:tracking-tight [&_h2]:text-2xl [&_h2]:font-semibold [&_h2]:leading-snug [&_h2]:pt-4 [&_blockquote]:border-l-4 [&_blockquote]:border-accent [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:my-8">
+    <main>
+      <article className="text-lg leading-relaxed [&_h1]:text-3xl [&_h1]:font-semibold [&_h1]:leading-tight [&_h1]:tracking-tight [&_h2]:text-2xl [&_h2]:font-semibold [&_h2]:leading-snug [&_blockquote]:border-l-4 [&_blockquote]:border-accent [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:my-8">
+    <section className="bg-milky">
+      <div className="max-w-prose mx-auto px-4 py-10 md:py-14 space-y-6">
         <Image
           src="/axonia_kids.webp"
           alt="Нейробук Axonia Kids"
@@ -173,7 +175,11 @@ export default function Home() {
           И именно эта попытка забирает гораздо больше сил, чем сами детские
           эмоции.
         </p>
+      </div>
+    </section>
 
+    <section className="bg-sand">
+      <div className="max-w-prose mx-auto px-4 py-10 md:py-14 space-y-6">
         <h2>
           Вы не обязаны ежедневно придумывать, как &laquo;развивать&raquo;
           ребенка.
@@ -303,7 +309,11 @@ export default function Home() {
           Вам не нужно ничего придумывать. Нужно только открыть следующую
           страницу.
         </p>
+      </div>
+    </section>
 
+    <section className="bg-milky">
+      <div className="max-w-prose mx-auto px-4 py-10 md:py-14 space-y-6">
         <h2>
           Мозгу ребенка не нужен аниматор. Ему нужен взрослый рядом на 15 минут.
         </h2>
@@ -369,7 +379,11 @@ export default function Home() {
         <p>
           Есть только одно небольшое действие, которое уже выбрано за вас.
         </p>
+      </div>
+    </section>
 
+    <section className="bg-sand">
+      <div className="max-w-prose mx-auto px-4 py-10 md:py-14 space-y-6">
         <h2>
           Нейробук — когда вам больше не нужно думать, что делать сегодня.
         </h2>
@@ -442,7 +456,11 @@ export default function Home() {
         <p>Не нужно изучать исследования.</p>
         <p>Вы просто проводите вместе пятнадцать минут.</p>
         <p>А мозг ребенка делает свою работу сам.</p>
+      </div>
+    </section>
 
+    <section className="bg-milky">
+      <div className="max-w-prose mx-auto px-4 py-10 md:py-14 space-y-6">
         <h2>
           Через 15 минут заканчивается игра. Заканчивается и чувство долга.
         </h2>
@@ -566,7 +584,11 @@ export default function Home() {
           не только для ребенка.
         </p>
         <p>Но и для вас.</p>
+      </div>
+    </section>
 
+    <section className="bg-sand">
+      <div className="max-w-prose mx-auto px-4 py-10 md:py-14 space-y-6">
         <h2>Перестаньте участвовать в гонке, которую невозможно выиграть.</h2>
 
         <p>
@@ -743,6 +765,8 @@ export default function Home() {
             <p className="mt-1 text-sm opacity-80">Далее будет повышение.</p>
           </aside>
         </div>
+      </div>
+    </section>
       </article>
     </main>
   );
