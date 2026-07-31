@@ -716,15 +716,19 @@ export default function Home() {
           И разрешите себе перестать каждый день начинать все заново.
         </p>
 
-        <div className="mt-10 flex flex-col gap-4 md:flex-row md:items-stretch">
+        <div
+          id="buy"
+          className="mt-10 flex flex-col gap-4 rounded-xl border border-accent/30 bg-white/60 p-4 shadow-sm md:flex-row md:items-stretch md:p-5"
+        >
           <a
             href="#"
-            className="bg-accent text-white px-6 py-3 rounded-lg font-medium w-full md:w-auto text-center inline-flex items-center justify-center shrink-0"
+            className="bg-accent text-white px-6 py-3.5 rounded-lg font-medium w-full md:w-auto text-center inline-flex flex-col items-center justify-center shrink-0 hover:opacity-90 transition-opacity"
           >
-            Скачать Нейробук
+            <span>Купить Нейробук</span>
+            <span className="text-sm font-normal opacity-90">490&nbsp;₽</span>
           </a>
           <aside
-            className="flex-1 rounded-lg border border-accent/40 bg-white/50 px-4 py-3 text-base leading-snug"
+            className="flex-1 text-base leading-snug"
             aria-label="Цена для первых покупателей"
           >
             <p className="text-sm font-semibold uppercase tracking-wide text-accent">
@@ -734,7 +738,7 @@ export default function Home() {
               Новый продукт — для первых{" "}
               <span className="font-semibold">100 покупателей</span> цена самая
               низкая:{" "}
-              <span className="font-semibold text-accent">490&nbsp;руб.</span>
+              <span className="font-semibold text-accent">490&nbsp;₽</span>
             </p>
             <p className="mt-1 text-sm opacity-80">Далее будет повышение.</p>
           </aside>
