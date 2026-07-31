@@ -5,6 +5,9 @@ export const metadata: Metadata = {
   title: "Нейробук Axonia Kids — 15 минут в день без лишних решений",
   description:
     "24 готовых занятия для детей 3–6 лет. Откройте страницу — и не нужно придумывать, во что играть сегодня. Ранняя цена для первых 100 покупателей — 490 ₽.",
+  icons: {
+    icon: "/favicon.png",
+  },
   openGraph: {
     title: "Нейробук Axonia Kids",
     description:
