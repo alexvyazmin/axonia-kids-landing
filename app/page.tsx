@@ -1,10 +1,15 @@
 import Image from "next/image";
+import PurchaseBlock from "./components/PurchaseBlock";
+import ReadingProgress from "./components/ReadingProgress";
+import RevealSection from "./components/RevealSection";
+import SectionMark from "./components/SectionMark";
 
 export default function Home() {
   return (
     <main>
-      <article className="text-lg leading-relaxed [&_h1]:text-3xl [&_h1]:font-semibold [&_h1]:leading-tight [&_h1]:tracking-tight [&_h2]:text-2xl [&_h2]:font-semibold [&_h2]:leading-snug [&_blockquote]:border-l-4 [&_blockquote]:border-accent [&_blockquote]:pl-4 [&_blockquote]:italic [&_blockquote]:my-8">
-    <section className="bg-milky">
+      <ReadingProgress />
+      <article className="longread text-lg leading-relaxed [&_h1]:text-3xl [&_h1]:font-semibold [&_h1]:leading-tight [&_h1]:tracking-tight [&_h2]:text-2xl [&_h2]:font-semibold [&_h2]:leading-snug">
+    <RevealSection className="bg-milky" eager>
       <div className="max-w-prose mx-auto px-4 py-10 md:py-14 space-y-6">
         <Image
           src="/axonia_kids.webp"
@@ -14,6 +19,7 @@ export default function Home() {
           priority
           className="w-full h-auto rounded-lg"
         />
+        <SectionMark kind="load" />
         <h1>Вы устали не от ребенка. Вы устали помнить всё за всех.</h1>
 
         <p>Кажется, что вы просто мама своего ребенка.</p>
@@ -176,10 +182,11 @@ export default function Home() {
           эмоции.
         </p>
       </div>
-    </section>
+    </RevealSection>
 
-    <section className="bg-sand">
+    <RevealSection className="bg-sand">
       <div className="max-w-prose mx-auto px-4 py-10 md:py-14 space-y-6">
+        <SectionMark kind="develop" />
         <h2>
           Вы не обязаны ежедневно придумывать, как &laquo;развивать&raquo;
           ребенка.
@@ -310,10 +317,11 @@ export default function Home() {
           страницу.
         </p>
       </div>
-    </section>
+    </RevealSection>
 
-    <section className="bg-milky">
+    <RevealSection className="bg-milky">
       <div className="max-w-prose mx-auto px-4 py-10 md:py-14 space-y-6">
+        <SectionMark kind="together" />
         <h2>
           Мозгу ребенка не нужен аниматор. Ему нужен взрослый рядом на 15 минут.
         </h2>
@@ -380,10 +388,11 @@ export default function Home() {
           Есть только одно небольшое действие, которое уже выбрано за вас.
         </p>
       </div>
-    </section>
+    </RevealSection>
 
-    <section className="bg-sand">
+    <RevealSection className="bg-sand">
       <div className="max-w-prose mx-auto px-4 py-10 md:py-14 space-y-6">
+        <SectionMark kind="book" />
         <h2>
           Нейробук — когда вам больше не нужно думать, что делать сегодня.
         </h2>
@@ -457,10 +466,11 @@ export default function Home() {
         <p>Вы просто проводите вместе пятнадцать минут.</p>
         <p>А мозг ребенка делает свою работу сам.</p>
       </div>
-    </section>
+    </RevealSection>
 
-    <section className="bg-milky">
+    <RevealSection className="bg-milky">
       <div className="max-w-prose mx-auto px-4 py-10 md:py-14 space-y-6">
+        <SectionMark kind="duty" />
         <h2>
           Через 15 минут заканчивается игра. Заканчивается и чувство долга.
         </h2>
@@ -585,10 +595,11 @@ export default function Home() {
         </p>
         <p>Но и для вас.</p>
       </div>
-    </section>
+    </RevealSection>
 
-    <section className="bg-sand">
+    <RevealSection className="bg-sand">
       <div className="max-w-prose mx-auto px-4 py-10 md:py-14 space-y-6">
+        <SectionMark kind="race" />
         <h2>Перестаньте участвовать в гонке, которую невозможно выиграть.</h2>
 
         <p>
@@ -738,35 +749,9 @@ export default function Home() {
           И разрешите себе перестать каждый день начинать все заново.
         </p>
 
-        <div
-          id="buy"
-          className="mt-10 flex flex-col gap-4 rounded-xl border border-accent/30 bg-white/60 p-4 shadow-sm md:flex-row md:items-stretch md:p-5"
-        >
-          <a
-            href="#"
-            className="bg-accent text-white px-6 py-3.5 rounded-lg font-medium w-full md:w-auto text-center inline-flex flex-col items-center justify-center shrink-0 hover:opacity-90 transition-opacity"
-          >
-            <span>Купить Нейробук</span>
-            <span className="text-sm font-normal opacity-90">490&nbsp;₽</span>
-          </a>
-          <aside
-            className="flex-1 text-base leading-snug"
-            aria-label="Цена для первых покупателей"
-          >
-            <p className="text-sm font-semibold uppercase tracking-wide text-accent">
-              ★ Ранняя цена
-            </p>
-            <p className="mt-1">
-              Новый продукт — для первых{" "}
-              <span className="font-semibold">100 покупателей</span> цена самая
-              низкая:{" "}
-              <span className="font-semibold text-accent">490&nbsp;₽</span>
-            </p>
-            <p className="mt-1 text-sm opacity-80">Далее будет повышение.</p>
-          </aside>
-        </div>
+        <PurchaseBlock />
       </div>
-    </section>
+    </RevealSection>
       </article>
     </main>
   );

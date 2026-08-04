@@ -1,2 +1,42 @@
 @import "tailwindcss";
 @config "../tailwind.config.ts";
+
+/* Longread: soft section reveal */
+.reveal-section {
+  opacity: 0;
+  transform: translateY(14px);
+  transition:
+    opacity 0.7s ease,
+    transform 0.7s ease;
+}
+
+.reveal-section--visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Longread: emotional pull-quotes */
+.longread blockquote {
+  margin: 2rem 0;
+  padding: 1.1rem 1.25rem 1.1rem 1.35rem;
+  border-left: 3px solid #c45c3e;
+  border-radius: 0 0.75rem 0.75rem 0;
+  background: color-mix(in srgb, #f9f8f3 88%, #c45c3e 6%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #c45c3e 12%, transparent);
+  font-style: italic;
+  font-size: 1.15em;
+  line-height: 1.45;
+  color: #2c2e31;
+}
+
+.longread blockquote p + p {
+  margin-top: 0.5rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal-section {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
