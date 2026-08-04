@@ -1,31 +1,43 @@
 "use client";
 
-import { useState } from "react";
-
 type Props = {
   disabled?: boolean;
   marketingConsent?: boolean;
 };
 
+/**
+ * Static-friendly checkout:
+ * - Prefer a Payment Link from YooKassa cabinet (NEXT_PUBLIC_YOOKASSA_PAYMENT_URL)
+ * - Optional: separate backend create endpoint (NEXT_PUBLIC_YOOKASSA_CREATE_URL)
+ */
 export default function NeurobookBuyButton({
   disabled = false,
   marketingConsent = false,
 }: Props) {
-  const [loading, setLoading] = useState(false);
+  const paymentUrl = process.env.NEXT_PUBLIC_YOOKASSA_PAYMENT_URL;
+  const createUrl = process.env.NEXT_PUBLIC_YOOKASSA_CREATE_URL;
 
   async function onBuy() {
     if (disabled) return;
 
-    const createUrl = process.env.NEXT_PUBLIC_YOOKASSA_CREATE_URL;
-    if (!createUrl) {
-      alert("Не настроена переменная NEXT_PUBLIC_YOOKASSA_CREATE_URL.");
+    // 1) Payment Link — no backend needed (best for static hosting)
+    if (paymentUrl) {
+      // marketingConsent can be stored later via analytics/cookie if needed
+      void marketingConsent;
+      window.location.href = paymentUrl;
       return;
     }
 
-    setLoading(true);
+    // 2) Optional separate backend (server/index.js or another host)
+    if (!createUrl) {
+      alert(
+        "Оплата не настроена: задайте NEXT_PUBLIC_YOOKASSA_PAYMENT_URL (ссылка из кабинета ЮKassa) при сборке сайта."
+      );
+      return;
+    }
+
     try {
       const successUrl = `${window.location.origin}/success`;
-
       const res = await fetch(createUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -41,15 +53,14 @@ export default function NeurobookBuyButton({
         }),
       });
 
-      if (!res.ok) {
-        const text = await res.text().catch(() => "");
-        throw new Error(text || `HTTP ${res.status}`);
-      }
-
-      const data = (await res.json()) as {
+      const data = (await res.json().catch(() => ({}))) as {
         confirmation_url?: string;
+        error?: string;
       };
 
+      if (!res.ok) {
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
       if (!data.confirmation_url) {
         throw new Error("Нет confirmation_url в ответе сервера.");
       }
@@ -58,8 +69,6 @@ export default function NeurobookBuyButton({
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Ошибка при создании платежа.";
       alert(msg);
-    } finally {
-      setLoading(false);
     }
   }
 
@@ -67,10 +76,10 @@ export default function NeurobookBuyButton({
     <button
       type="button"
       onClick={onBuy}
-      disabled={disabled || loading}
+      disabled={disabled}
       className="bg-accent text-white px-6 py-3.5 rounded-lg font-medium w-full md:w-auto text-center inline-flex flex-col items-center justify-center shrink-0 hover:opacity-90 transition-opacity disabled:opacity-70 disabled:cursor-not-allowed"
     >
-      <span>{loading ? "Создаём оплату..." : "Купить Нейробук"}</span>
+      <span>Купить Нейробук</span>
       <span className="text-sm font-normal opacity-90">490&nbsp;₽</span>
     </button>
   );
