@@ -1,74 +1,52 @@
 "use client";
 
+import { useState } from "react";
+
 type Props = {
   disabled?: boolean;
   marketingConsent?: boolean;
 };
 
-/**
- * Static-friendly checkout:
- * - Prefer a Payment Link from YooKassa cabinet (NEXT_PUBLIC_YOOKASSA_PAYMENT_URL)
- * - Optional: separate backend create endpoint (NEXT_PUBLIC_YOOKASSA_CREATE_URL)
- */
+async function resolvePaymentUrl(): Promise<string | null> {
+  // 1) Build-time env (only if set during `npm run build`)
+  const fromEnv = process.env.NEXT_PUBLIC_YOOKASSA_PAYMENT_URL?.trim();
+  if (fromEnv) return fromEnv;
+
+  // 2) Runtime config for static hosting (works without rebuild env)
+  try {
+    const res = await fetch("/checkout.json", { cache: "no-store" });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { paymentUrl?: string };
+    const url = data.paymentUrl?.trim();
+    if (!url || url.includes("PASTE_YOOKASSA")) return null;
+    return url;
+  } catch {
+    return null;
+  }
+}
+
 export default function NeurobookBuyButton({
   disabled = false,
   marketingConsent = false,
 }: Props) {
-  const paymentUrl = process.env.NEXT_PUBLIC_YOOKASSA_PAYMENT_URL;
-  const createUrl = process.env.NEXT_PUBLIC_YOOKASSA_CREATE_URL;
+  const [loading, setLoading] = useState(false);
 
   async function onBuy() {
-    if (disabled) return;
+    if (disabled || loading) return;
+    void marketingConsent;
 
-    // 1) Payment Link — no backend needed (best for static hosting)
-    if (paymentUrl) {
-      // marketingConsent can be stored later via analytics/cookie if needed
-      void marketingConsent;
-      window.location.href = paymentUrl;
-      return;
-    }
-
-    // 2) Optional separate backend (server/index.js or another host)
-    if (!createUrl) {
-      alert(
-        "Оплата не настроена: задайте NEXT_PUBLIC_YOOKASSA_PAYMENT_URL (ссылка из кабинета ЮKassa) при сборке сайта."
-      );
-      return;
-    }
-
+    setLoading(true);
     try {
-      const successUrl = `${window.location.origin}/success`;
-      const res = await fetch(createUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          amountValue: "490.00",
-          currency: "RUB",
-          description: "Нейробук Axonia Kids",
-          returnUrl: successUrl,
-          metadata: {
-            product: "neurobook_early_490",
-            marketing_consent: marketingConsent ? "1" : "0",
-          },
-        }),
-      });
-
-      const data = (await res.json().catch(() => ({}))) as {
-        confirmation_url?: string;
-        error?: string;
-      };
-
-      if (!res.ok) {
-        throw new Error(data.error || `HTTP ${res.status}`);
+      const paymentUrl = await resolvePaymentUrl();
+      if (!paymentUrl) {
+        alert(
+          "Ссылка на оплату не задана. Укажите её в файле public/checkout.json (поле paymentUrl) и задеплойте сайт."
+        );
+        return;
       }
-      if (!data.confirmation_url) {
-        throw new Error("Нет confirmation_url в ответе сервера.");
-      }
-
-      window.location.href = data.confirmation_url;
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : "Ошибка при создании платежа.";
-      alert(msg);
+      window.location.assign(paymentUrl);
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -76,10 +54,10 @@ export default function NeurobookBuyButton({
     <button
       type="button"
       onClick={onBuy}
-      disabled={disabled}
+      disabled={disabled || loading}
       className="bg-accent text-white px-6 py-3.5 rounded-lg font-medium w-full md:w-auto text-center inline-flex flex-col items-center justify-center shrink-0 hover:opacity-90 transition-opacity disabled:opacity-70 disabled:cursor-not-allowed"
     >
-      <span>Купить Нейробук</span>
+      <span>{loading ? "Переходим к оплате..." : "Купить Нейробук"}</span>
       <span className="text-sm font-normal opacity-90">490&nbsp;₽</span>
     </button>
   );
