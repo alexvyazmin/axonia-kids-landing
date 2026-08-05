@@ -242,9 +242,13 @@ async function handleClaim(req, res) {
     });
   }
 
+  // Для теста сейчас 1 ₽. После проверки верните "490".
+  const minAmount = Number(process.env.MIN_PAYMENT_AMOUNT || "1");
   const value = payment?.amount?.value;
-  if (value && Number(value) < 490) {
-    return sendJson(res, 403, { error: "Сумма платежа не соответствует товару." });
+  if (value && Number(value) < minAmount) {
+    return sendJson(res, 403, {
+      error: `Сумма платежа меньше ${minAmount} ₽.`,
+    });
   }
 
   upsertPayment({
