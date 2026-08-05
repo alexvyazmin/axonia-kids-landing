@@ -4,6 +4,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
+const nodemailer = require("nodemailer");
 
 // Timeweb / Docker обычно прокидывают PORT=3000
 const PORT = Number(process.env.PORT) || 3000;
@@ -17,6 +18,14 @@ const CORS_ORIGIN = process.env.CORS_ORIGIN || "https://kids.axonia.ru";
 const PUBLIC_BASE_URL = (
   process.env.PUBLIC_BASE_URL || `http://127.0.0.1:${PORT}`
 ).replace(/\/$/, "");
+
+// SMTP for sending email with the download link
+const SMTP_HOST = process.env.SMTP_HOST;
+const SMTP_PORT = Number(process.env.SMTP_PORT || "465");
+const SMTP_USER = process.env.SMTP_USER;
+const SMTP_PASS = process.env.SMTP_PASS;
+const EMAIL_FROM = process.env.EMAIL_FROM || "hello@axonia.ru";
+const EMAIL_SUBJECT = process.env.EMAIL_SUBJECT || "Ваш Нейробук Axonia Kids";
 
 const PDF_PATH = path.join(__dirname, "private", "neurobook.pdf");
 
@@ -81,6 +90,31 @@ function getAuthHeader() {
     "Basic " +
     Buffer.from(`${YOOKASSA_SHOP_ID}:${YOOKASSA_SECRET_KEY}`).toString("base64")
   );
+}
+
+async function sendEmail(to, subject, text) {
+  if (!to) return;
+  if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) {
+    console.warn("SMTP not configured. Skip email to:", to);
+    return;
+  }
+
+  const transporter = nodemailer.createTransport({
+    host: SMTP_HOST,
+    port: SMTP_PORT,
+    secure: SMTP_PORT === 465,
+    auth: {
+      user: SMTP_USER,
+      pass: SMTP_PASS,
+    },
+  });
+
+  await transporter.sendMail({
+    from: EMAIL_FROM,
+    to,
+    subject,
+    text,
+  });
 }
 
 function readJson(req) {
@@ -173,6 +207,7 @@ function createDownloadToken(paymentId) {
 function extractEmail(payment) {
   return (
     payment?.receipt?.customer?.email ||
+    payment?.payer?.email ||
     payment?.metadata?.email ||
     payment?.metadata?.customer_email ||
     null
@@ -198,7 +233,40 @@ async function handleWebhook(req, res) {
   });
 
   if (body.event === "payment.succeeded" && payment.status === "succeeded") {
-    console.log("payment.succeeded", payment.id, extractEmail(payment));
+    const email = extractEmail(payment);
+    if (email) {
+      const existing = readStore(PAYMENTS_FILE).find((p) => p.id === payment.id);
+      const alreadySent = Boolean(existing?.emailSentAt);
+
+      if (!alreadySent) {
+        const token = createDownloadToken(payment.id);
+        const downloadUrl = `${PUBLIC_BASE_URL}/api/download?token=${token}`;
+
+        const text = [
+          `Здравствуйте!`,
+          ``,
+          `Оплата подтверждена.`,
+          `Ваш Нейробук готов к скачиванию.`,
+          ``,
+          `Ссылка для скачивания (действует 24 часа):`,
+          `${downloadUrl}`,
+          ``,
+          `Если ссылка не открывается — напишите в поддержку.`,
+        ].join("\n");
+
+        await sendEmail(email, EMAIL_SUBJECT, text);
+
+        upsertPayment({
+          id: payment.id,
+          emailSentAt: Date.now(),
+        });
+        console.log("payment.succeeded + email sent", payment.id, email);
+      } else {
+        console.log("payment.succeeded email already sent", payment.id, email);
+      }
+    } else {
+      console.log("payment.succeeded no email in payment object", payment.id);
+    }
   }
 
   return sendJson(res, 200, { ok: true });
