@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
+    "start:download-api": "node server/index.js",
     "lint": "eslint"
   },
   "dependencies": {

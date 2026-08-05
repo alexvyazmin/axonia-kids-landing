@@ -1,3 +1,4 @@
 {
-  "paymentUrl": "https://yookassa.ru/my/i/anHUXDcqm3Nz/l"
+  "paymentUrl": "https://yookassa.ru/my/i/anHUXDcqm3Nz/l",
+  "claimUrl": "https://PASTE_BACKEND_DOMAIN/api/claim"
 }

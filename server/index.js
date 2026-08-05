@@ -1,17 +1,53 @@
 const http = require("http");
 const { URL } = require("url");
 const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
 
 const PORT = process.env.PORT || 3001;
+const HOST = "0.0.0.0";
 
 const YOOKASSA_SHOP_ID = process.env.YOOKASSA_SHOP_ID;
 const YOOKASSA_SECRET_KEY = process.env.YOOKASSA_SECRET_KEY;
-
 const YOOKASSA_API_BASE = "https://api.yookassa.ru/v3";
+
+const CORS_ORIGIN = process.env.CORS_ORIGIN || "https://kids.axonia.ru";
+const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || `http://localhost:${PORT}`).replace(
+  /\/$/,
+  ""
+);
+
+const PDF_PATH = path.join(__dirname, "private", "neurobook.pdf");
+const DATA_DIR = path.join(__dirname, "data");
+const PAYMENTS_FILE = path.join(DATA_DIR, "payments.json");
+const TOKENS_FILE = path.join(DATA_DIR, "tokens.json");
+
+const TOKEN_TTL_MS = 1000 * 60 * 60 * 24; // 24h
+const MAX_DOWNLOADS_PER_TOKEN = 3;
+
+function ensureDataFiles() {
+  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  if (!fs.existsSync(PAYMENTS_FILE)) fs.writeFileSync(PAYMENTS_FILE, "[]");
+  if (!fs.existsSync(TOKENS_FILE)) fs.writeFileSync(TOKENS_FILE, "[]");
+}
+
+function readStore(file) {
+  ensureDataFiles();
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch {
+    return [];
+  }
+}
+
+function writeStore(file, data) {
+  ensureDataFiles();
+  fs.writeFileSync(file, JSON.stringify(data, null, 2));
+}
 
 function corsHeaders() {
   return {
-    "Access-Control-Allow-Origin": process.env.CORS_ORIGIN || "*",
+    "Access-Control-Allow-Origin": CORS_ORIGIN,
     "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
   };
@@ -21,10 +57,10 @@ function getAuthHeader() {
   if (!YOOKASSA_SHOP_ID || !YOOKASSA_SECRET_KEY) {
     throw new Error("YOOKASSA_SHOP_ID / YOOKASSA_SECRET_KEY не заданы в env.");
   }
-  const token = Buffer.from(`${YOOKASSA_SHOP_ID}:${YOOKASSA_SECRET_KEY}`).toString(
-    "base64"
+  return (
+    "Basic " +
+    Buffer.from(`${YOOKASSA_SHOP_ID}:${YOOKASSA_SECRET_KEY}`).toString("base64")
   );
-  return `Basic ${token}`;
 }
 
 function readJson(req) {
@@ -52,29 +88,11 @@ function sendJson(res, status, obj) {
   res.end(JSON.stringify(obj));
 }
 
-function safeJson(res, status, obj) {
-  try {
-    sendJson(res, status, obj);
-  } catch {
-    res.writeHead(status, corsHeaders());
-    res.end();
-  }
-}
-
-function normalizeReturnUrl(input) {
-  // В Yookassa return_url должен быть абсолютным URL с протоколом и доменом.
-  if (!input || typeof input !== "string") return undefined;
-  if (!input.startsWith("http://") && !input.startsWith("https://")) return undefined;
-  return input;
-}
-
-async function yooKassaRequest(path, { method = "GET", body, headers = {} }) {
-  const authHeader = getAuthHeader();
-
-  const res = await fetch(`${YOOKASSA_API_BASE}${path}`, {
+async function yooKassaRequest(apiPath, { method = "GET", body, headers = {} } = {}) {
+  const res = await fetch(`${YOOKASSA_API_BASE}${apiPath}`, {
     method,
     headers: {
-      Authorization: authHeader,
+      Authorization: getAuthHeader(),
       ...(body ? { "Content-Type": "application/json" } : {}),
       ...headers,
     },
@@ -90,169 +108,174 @@ async function yooKassaRequest(path, { method = "GET", body, headers = {} }) {
   }
 
   if (!res.ok) {
-    const msg = (json && (json.message || json.error)) || text || `HTTP ${res.status}`;
+    const msg =
+      (json && (json.description || json.message)) || text || `HTTP ${res.status}`;
     const err = new Error(msg);
     err.statusCode = res.status;
-    err.details = json;
     throw err;
   }
-
   return json;
 }
 
-async function createRedirectPayment({ amountValue, currency, description, returnUrl, metadata }) {
-  const idempotenceKey = crypto.randomUUID();
+function upsertPayment(record) {
+  const list = readStore(PAYMENTS_FILE);
+  const idx = list.findIndex((p) => p.id === record.id);
+  if (idx >= 0) list[idx] = { ...list[idx], ...record };
+  else list.push(record);
+  writeStore(PAYMENTS_FILE, list);
+  return record;
+}
 
-  const paymentData = {
-    amount: {
-      value: String(amountValue),
-      currency,
-    },
-    capture: true,
-    confirmation: {
-      type: "redirect",
-      return_url: returnUrl,
-    },
-    description,
-    metadata: metadata || {},
-  };
-
-  // Minimal payload per YooKassa v3 payments redirect flow:
-  // amount + capture + confirmation(redirect/return_url) + (optional) description/metadata.
-  return yooKassaRequest("/payments", {
-    method: "POST",
-    body: paymentData,
-    headers: { "Idempotence-Key": idempotenceKey },
+function createDownloadToken(paymentId) {
+  const tokens = readStore(TOKENS_FILE);
+  const token = crypto.randomBytes(24).toString("hex");
+  const now = Date.now();
+  tokens.push({
+    token,
+    paymentId,
+    createdAt: now,
+    expiresAt: now + TOKEN_TTL_MS,
+    downloads: 0,
   });
+  writeStore(TOKENS_FILE, tokens);
+  return token;
 }
 
-function getClientIP(req) {
-  const xf = req.headers["x-forwarded-for"];
-  if (typeof xf === "string" && xf) {
-    // Usually: "ip1, ip2, ..."
-    return xf.split(",")[0].trim();
-  }
-  const xReal = req.headers["x-real-ip"];
-  if (typeof xReal === "string" && xReal) return xReal;
-  return req.socket?.remoteAddress;
-}
-
-// YooKassa may send from multiple IPs (see docs). We keep it optional
-// because proxies/CDNs may change observable IPs.
-//
-// Default: SKIP IP check (more reliable on managed hosting).
-// Set YOOKASSA_SKIP_IP_CHECK=0 to enable strict verification.
-const SKIP_IP_CHECK = process.env.YOOKASSA_SKIP_IP_CHECK !== "0";
-
-function ipStartsWithPrefix(ip, prefix) {
-  if (!ip) return false;
-  return ip.toLowerCase().startsWith(prefix.toLowerCase());
-}
-
-function ipInCidrV4(ip, cidr) {
-  // Very small IPv4 CIDR helper: x.x.x.x/N
-  const [rangeIp, bitsStr] = cidr.split("/");
-  const bits = Number(bitsStr);
-  if (!rangeIp || !Number.isFinite(bits)) return false;
-
-  const ipParts = ip.split(".").map((x) => Number(x));
-  const rangeParts = rangeIp.split(".").map((x) => Number(x));
-  if (ipParts.length !== 4 || rangeParts.length !== 4) return false;
-
-  const ipNum =
-    (ipParts[0] << 24) + (ipParts[1] << 16) + (ipParts[2] << 8) + ipParts[3];
-  const rangeNum =
-    (rangeParts[0] << 24) +
-    (rangeParts[1] << 16) +
-    (rangeParts[2] << 8) +
-    rangeParts[3];
-
-  const mask = bits === 0 ? 0 : (~0 << (32 - bits)) >>> 0;
-  return (ipNum >>> 0 & mask) === (rangeNum >>> 0 & mask);
-}
-
-function isAllowedYooKassaIP(ip) {
-  if (!ip) return false;
-
-  // IPv4 allowlist (from YooKassa docs)
-  if (
-    ipInCidrV4(ip, "185.71.76.0/27") ||
-    ipInCidrV4(ip, "185.71.77.0/27") ||
-    ipInCidrV4(ip, "77.75.153.0/25") ||
-    ipInCidrV4(ip, "77.75.154.128/25") ||
-    ip === "77.75.156.11" ||
-    ip === "77.75.156.35"
-  ) {
-    return true;
-  }
-
-  // IPv6 allowlist prefix
-  if (ipStartsWithPrefix(ip, "2a02:5180:")) return true; // /32
-
-  return false;
-}
-
-async function handleCreate(req, res) {
-  const body = await readJson(req);
-  const amountValue = body?.amountValue ?? body?.amount ?? "490.00";
-  const currency = body?.currency ?? "RUB";
-  const description = body?.description ?? "Нейробук Axonia Kids";
-  const returnUrl = normalizeReturnUrl(body?.returnUrl);
-  const metadata = body?.metadata ?? {};
-
-  if (!returnUrl) {
-    return safeJson(res, 400, { error: "returnUrl должен быть абсолютным https://..." });
-  }
-
-  const payment = await createRedirectPayment({
-    amountValue: Number(amountValue).toFixed(2),
-    currency,
-    description,
-    returnUrl,
-    metadata,
-  });
-
-  return safeJson(res, 200, {
-    payment_id: payment.id,
-    status: payment.status,
-    confirmation_url: payment?.confirmation?.confirmation_url,
-  });
+function extractEmail(payment) {
+  return (
+    payment?.receipt?.customer?.email ||
+    payment?.metadata?.email ||
+    payment?.metadata?.customer_email ||
+    null
+  );
 }
 
 async function handleWebhook(req, res) {
-  // IMPORTANT: for webhook authenticity checks you typically need raw body.
-  // Here мы делаем безопасную проверку через статус платежа у YooKassa.
   const body = await readJson(req);
-
   if (!body?.event || !body?.object?.id) {
-    return safeJson(res, 400, { error: "Неверный формат webhook" });
+    return sendJson(res, 400, { error: "Неверный формат webhook" });
   }
 
-  const event = body.event;
   const paymentId = body.object.id;
+  // Verify against YooKassa API (anti-spoof)
+  const payment = await yooKassaRequest(`/payments/${paymentId}`);
 
-  if (!SKIP_IP_CHECK) {
-    const clientIP = getClientIP(req);
-    if (!isAllowedYooKassaIP(clientIP)) {
-      return safeJson(res, 403, { error: "Webhook: IP не из разрешённого диапазона" });
-    }
+  upsertPayment({
+    id: payment.id,
+    status: payment.status,
+    amount: payment.amount,
+    email: extractEmail(payment),
+    paid: payment.paid === true,
+    updatedAt: Date.now(),
+  });
+
+  if (body.event === "payment.succeeded" && payment.status === "succeeded") {
+    console.log("payment.succeeded", payment.id, extractEmail(payment));
   }
 
-  // Verify current payment status (prevents spoofed events)
-  const payment = await yooKassaRequest(`/payments/${paymentId}`, { method: "GET" });
+  return sendJson(res, 200, { ok: true });
+}
 
-  // payment.status is like: succeeded / canceled / waiting_for_capture etc.
-  if (event === "payment.succeeded" && payment?.status === "succeeded") {
-    // TODO: выдача файла/доступа (пока логируем).
-    // order_id можно положить в metadata.order_id при создании платежа.
-    console.log("YooKassa: payment.succeeded", {
-      paymentId,
-      order_id: payment?.metadata?.order_id ?? payment?.metadata?.product,
+async function handleClaim(req, res) {
+  const body = await readJson(req);
+  const paymentId = (body.paymentId || body.payment_id || "").trim();
+  const email = (body.email || "").trim().toLowerCase();
+
+  if (!paymentId && !email) {
+    return sendJson(res, 400, {
+      error: "Укажите ID платежа из чека ЮKassa или email, указанный при оплате.",
     });
   }
 
-  // YooKassa требует HTTP 200, иначе будет повторная отправка до 24 часов.
-  return safeJson(res, 200, { ok: true });
+  let payment;
+
+  if (paymentId) {
+    payment = await yooKassaRequest(`/payments/${paymentId}`);
+  } else {
+    // Lookup recent local succeeded payments by email (filled via webhook)
+    const list = readStore(PAYMENTS_FILE)
+      .filter((p) => p.status === "succeeded" && p.email)
+      .filter((p) => String(p.email).toLowerCase() === email)
+      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+    if (!list.length) {
+      return sendJson(res, 404, {
+        error:
+          "Оплата с таким email не найдена. Укажите ID платежа из письма/чека ЮKassa или подождите 1–2 минуты после оплаты.",
+      });
+    }
+
+    payment = await yooKassaRequest(`/payments/${list[0].id}`);
+  }
+
+  if (payment.status !== "succeeded" || payment.paid !== true) {
+    return sendJson(res, 402, {
+      error: "Платёж ещё не завершён или не успешен.",
+      status: payment.status,
+    });
+  }
+
+  // Optional: only allow expected product amount
+  const value = payment?.amount?.value;
+  if (value && Number(value) < 490) {
+    return sendJson(res, 403, { error: "Сумма платежа не соответствует товару." });
+  }
+
+  upsertPayment({
+    id: payment.id,
+    status: payment.status,
+    amount: payment.amount,
+    email: extractEmail(payment) || email || null,
+    paid: true,
+    updatedAt: Date.now(),
+  });
+
+  const token = createDownloadToken(payment.id);
+  return sendJson(res, 200, {
+    downloadUrl: `${PUBLIC_BASE_URL}/api/download?token=${token}`,
+    expiresInHours: 24,
+    maxDownloads: MAX_DOWNLOADS_PER_TOKEN,
+  });
+}
+
+function handleDownload(req, res, parsed) {
+  const token = parsed.searchParams.get("token");
+  if (!token) {
+    return sendJson(res, 400, { error: "Нет token" });
+  }
+
+  const tokens = readStore(TOKENS_FILE);
+  const idx = tokens.findIndex((t) => t.token === token);
+  if (idx < 0) {
+    return sendJson(res, 403, { error: "Ссылка недействительна." });
+  }
+
+  const item = tokens[idx];
+  if (Date.now() > item.expiresAt) {
+    return sendJson(res, 403, { error: "Срок действия ссылки истёк." });
+  }
+  if (item.downloads >= MAX_DOWNLOADS_PER_TOKEN) {
+    return sendJson(res, 403, { error: "Лимит скачиваний по ссылке исчерпан." });
+  }
+
+  if (!fs.existsSync(PDF_PATH)) {
+    return sendJson(res, 500, { error: "Файл товара не найден на сервере." });
+  }
+
+  item.downloads += 1;
+  tokens[idx] = item;
+  writeStore(TOKENS_FILE, tokens);
+
+  const stat = fs.statSync(PDF_PATH);
+  res.writeHead(200, {
+    "Content-Type": "application/pdf",
+    "Content-Length": stat.size,
+    "Content-Disposition":
+      'attachment; filename="Neurobook-Axonia-Kids.pdf"; filename*=UTF-8\'\'%D0%9D%D0%B5%D0%B9%D1%80%D0%BE%D0%B1%D1%83%D0%BA-Axonia-Kids.pdf',
+    "Cache-Control": "no-store",
+    ...corsHeaders(),
+  });
+  fs.createReadStream(PDF_PATH).pipe(res);
 }
 
 const server = http.createServer(async (req, res) => {
@@ -266,9 +289,11 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    if (req.method === "POST" && pathname === "/api/yookassa/create") {
-      await handleCreate(req, res);
-      return;
+    if (req.method === "GET" && pathname === "/health") {
+      return sendJson(res, 200, {
+        ok: true,
+        pdf: fs.existsSync(PDF_PATH),
+      });
     }
 
     if (req.method === "POST" && pathname === "/api/yookassa/webhook") {
@@ -276,17 +301,27 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+    if (req.method === "POST" && pathname === "/api/claim") {
+      await handleClaim(req, res);
+      return;
+    }
+
+    if (req.method === "GET" && pathname === "/api/download") {
+      handleDownload(req, res, parsed);
+      return;
+    }
+
+    res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8", ...corsHeaders() });
     res.end("Not Found");
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "Unknown error";
-    const status = e && e.statusCode ? e.statusCode : 500;
-    console.error("Server error:", e);
-    safeJson(res, status, { error: msg });
+    console.error(e);
+    const status = e.statusCode || 500;
+    sendJson(res, status, { error: e.message || "Server error" });
   }
 });
 
-server.listen(PORT, "0.0.0.0", () => {
-  console.log(`YooKassa backend listening on http://0.0.0.0:${PORT}`);
+ensureDataFiles();
+server.listen(PORT, HOST, () => {
+  console.log(`Download backend on http://${HOST}:${PORT}`);
+  console.log(`PDF present: ${fs.existsSync(PDF_PATH)}`);
 });
-
