@@ -27,6 +27,13 @@ const SMTP_PASS = process.env.SMTP_PASS;
 const EMAIL_FROM = process.env.EMAIL_FROM || "hello@axonia.ru";
 const EMAIL_SUBJECT = process.env.EMAIL_SUBJECT || "Ваш Нейробук Axonia Kids";
 
+// Сумма платежа (для теста можно PAYMENT_AMOUNT=1)
+const PAYMENT_AMOUNT = Number(process.env.PAYMENT_AMOUNT || "490").toFixed(2);
+const RETURN_URL =
+  process.env.RETURN_URL || "https://kids.axonia.ru/success/";
+// Если в ЮKassa включены чеки — поставьте INCLUDE_RECEIPT=1
+const INCLUDE_RECEIPT = process.env.INCLUDE_RECEIPT === "1";
+
 const PDF_PATH = path.join(__dirname, "private", "neurobook.pdf");
 
 // В контейнере запись в репозиторий может быть запрещена — используем /tmp
@@ -214,6 +221,88 @@ function extractEmail(payment) {
   );
 }
 
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+async function handleCreatePayment(req, res) {
+  const body = await readJson(req);
+  const email = String(body.email || "")
+    .trim()
+    .toLowerCase();
+  const marketingConsent = body.marketingConsent === true || body.marketingConsent === "1";
+
+  if (!isValidEmail(email)) {
+    return sendJson(res, 400, { error: "Укажите корректный email." });
+  }
+
+  const amountValue = body.amountValue
+    ? Number(body.amountValue).toFixed(2)
+    : PAYMENT_AMOUNT;
+
+  const paymentBody = {
+    amount: {
+      value: amountValue,
+      currency: "RUB",
+    },
+    capture: true,
+    confirmation: {
+      type: "redirect",
+      return_url: RETURN_URL,
+    },
+    description: "Нейробук Axonia Kids",
+    metadata: {
+      email,
+      product: "neurobook",
+      marketing_consent: marketingConsent ? "1" : "0",
+    },
+  };
+
+  if (INCLUDE_RECEIPT) {
+    paymentBody.receipt = {
+      customer: { email },
+      items: [
+        {
+          description: "Нейробук Axonia Kids",
+          quantity: "1.00",
+          amount: {
+            value: amountValue,
+            currency: "RUB",
+          },
+          vat_code: 1,
+          payment_mode: "full_payment",
+          payment_subject: "intellectual_activity",
+        },
+      ],
+    };
+  }
+
+  const payment = await yooKassaRequest("/payments", {
+    method: "POST",
+    headers: { "Idempotence-Key": crypto.randomUUID() },
+    body: paymentBody,
+  });
+
+  const confirmationUrl = payment?.confirmation?.confirmation_url;
+  if (!confirmationUrl) {
+    return sendJson(res, 502, { error: "ЮKassa не вернула confirmation_url" });
+  }
+
+  upsertPayment({
+    id: payment.id,
+    status: payment.status,
+    amount: payment.amount,
+    email,
+    paid: false,
+    updatedAt: Date.now(),
+  });
+
+  return sendJson(res, 200, {
+    payment_id: payment.id,
+    confirmation_url: confirmationUrl,
+  });
+}
+
 async function handleWebhook(req, res) {
   const body = await readJson(req);
   if (!body?.event || !body?.object?.id) {
@@ -222,50 +311,73 @@ async function handleWebhook(req, res) {
 
   const paymentId = body.object.id;
   const payment = await yooKassaRequest(`/payments/${paymentId}`);
+  const existingBefore = readStore(PAYMENTS_FILE).find((p) => p.id === payment.id);
+
+  const email =
+    extractEmail(payment) ||
+    extractEmail(body.object) ||
+    existingBefore?.email ||
+    null;
 
   upsertPayment({
     id: payment.id,
     status: payment.status,
     amount: payment.amount,
-    email: extractEmail(payment),
+    ...(email ? { email } : {}),
     paid: payment.paid === true,
     updatedAt: Date.now(),
   });
 
   if (body.event === "payment.succeeded" && payment.status === "succeeded") {
-    const email = extractEmail(payment);
+    if (!email) {
+      console.log("payment.succeeded no email found", payment.id, {
+        receiptEmail: payment?.receipt?.customer?.email,
+        payerEmail: payment?.payer?.email,
+        webhookReceiptEmail: body?.object?.receipt?.customer?.email,
+        webhookPayerEmail: body?.object?.payer?.email,
+        metadataEmail: payment?.metadata?.email,
+        storedEmail: existingBefore?.email || null,
+      });
+    }
+
     if (email) {
       const existing = readStore(PAYMENTS_FILE).find((p) => p.id === payment.id);
       const alreadySent = Boolean(existing?.emailSentAt);
 
-      if (!alreadySent) {
-        const token = createDownloadToken(payment.id);
-        const downloadUrl = `${PUBLIC_BASE_URL}/api/download?token=${token}`;
+      if (alreadySent) {
+        console.log("payment.succeeded email already sent", payment.id, email);
+        return sendJson(res, 200, { ok: true });
+      }
 
-        const text = [
-          `Здравствуйте!`,
-          ``,
-          `Оплата подтверждена.`,
-          `Ваш Нейробук готов к скачиванию.`,
-          ``,
-          `Ссылка для скачивания (действует 24 часа):`,
-          `${downloadUrl}`,
-          ``,
-          `Если ссылка не открывается — напишите в поддержку.`,
-        ].join("\n");
+      const token = createDownloadToken(payment.id);
+      const downloadUrl = `${PUBLIC_BASE_URL}/api/download?token=${token}`;
 
+      const text = [
+        `Здравствуйте!`,
+        ``,
+        `Оплата подтверждена.`,
+        `Ваш Нейробук готов к скачиванию.`,
+        ``,
+        `Ссылка для скачивания (действует 24 часа):`,
+        `${downloadUrl}`,
+        ``,
+        `Если ссылка не открывается — напишите в поддержку.`,
+      ].join("\n");
+
+      try {
         await sendEmail(email, EMAIL_SUBJECT, text);
-
         upsertPayment({
           id: payment.id,
+          email,
           emailSentAt: Date.now(),
         });
         console.log("payment.succeeded + email sent", payment.id, email);
-      } else {
-        console.log("payment.succeeded email already sent", payment.id, email);
+      } catch (e) {
+        console.error("payment.succeeded email send failed", payment.id, {
+          to: email,
+          error: e instanceof Error ? e.message : String(e),
+        });
       }
-    } else {
-      console.log("payment.succeeded no email in payment object", payment.id);
     }
   }
 
@@ -311,7 +423,7 @@ async function handleClaim(req, res) {
   }
 
   // Для теста сейчас 1 ₽. После проверки верните "490".
-  const minAmount = Number(process.env.MIN_PAYMENT_AMOUNT || "1");
+  const minAmount = Number(process.env.MIN_PAYMENT_AMOUNT || process.env.PAYMENT_AMOUNT || "490");
   const value = payment?.amount?.value;
   if (value && Number(value) < minAmount) {
     return sendJson(res, 403, {
@@ -393,6 +505,11 @@ const server = http.createServer(async (req, res) => {
       (pathname === "/" || pathname === "/health" || pathname === "/healthz")
     ) {
       return sendJson(res, 200, healthPayload());
+    }
+
+    if (req.method === "POST" && pathname === "/api/yookassa/create") {
+      await handleCreatePayment(req, res);
+      return;
     }
 
     if (req.method === "POST" && pathname === "/api/yookassa/webhook") {

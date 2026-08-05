@@ -6,8 +6,12 @@ import { useLegal } from "./LegalProvider";
 
 export default function PurchaseBlock() {
   const { openPrivacy, openOffer } = useLegal();
+  const [email, setEmail] = useState("");
   const [acceptedLegal, setAcceptedLegal] = useState(false);
   const [acceptedMarketing, setAcceptedMarketing] = useState(false);
+
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const canPay = acceptedLegal && emailOk;
 
   return (
     <div
@@ -16,7 +20,8 @@ export default function PurchaseBlock() {
     >
       <div className="flex flex-col gap-4 md:flex-row md:items-stretch">
         <NeurobookBuyButton
-          disabled={!acceptedLegal}
+          disabled={!canPay}
+          email={email.trim()}
           marketingConsent={acceptedMarketing}
         />
         <aside
@@ -37,6 +42,23 @@ export default function PurchaseBlock() {
       </div>
 
       <div className="space-y-3 border-t border-slate-dark/10 pt-4 text-sm leading-snug">
+        <label className="block">
+          <span className="mb-1 block font-medium">
+            Email для получения Нейробука
+          </span>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="name@example.com"
+            autoComplete="email"
+            className="w-full rounded-lg border border-slate-dark/15 bg-milky px-3 py-2 text-base outline-none focus:border-accent"
+          />
+          <span className="mt-1 block text-xs opacity-70">
+            После оплаты отправим ссылку на скачивание на этот адрес.
+          </span>
+        </label>
+
         <label className="flex cursor-pointer items-start gap-2">
           <input
             type="checkbox"
@@ -79,9 +101,10 @@ export default function PurchaseBlock() {
           </span>
         </label>
 
-        {!acceptedLegal && (
+        {!canPay && (
           <p className="text-xs opacity-70">
-            Чтобы перейти к оплате, отметьте обязательное согласие.
+            Укажите email и отметьте обязательное согласие, чтобы перейти к
+            оплате.
           </p>
         )}
       </div>

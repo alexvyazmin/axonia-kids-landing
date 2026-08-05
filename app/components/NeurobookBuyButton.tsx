@@ -3,12 +3,12 @@
 import { useState } from "react";
 
 type CheckoutConfig = {
-  paymentUrl?: string;
+  createUrl?: string;
   claimUrl?: string;
+  paymentUrl?: string;
 };
 
 async function loadCheckoutConfig(): Promise<CheckoutConfig> {
-  // checkout.json — источник правды (можно менять без пересборки env)
   try {
     const res = await fetch(`/checkout.json?t=${Date.now()}`, {
       cache: "no-store",
@@ -16,12 +16,15 @@ async function loadCheckoutConfig(): Promise<CheckoutConfig> {
     if (res.ok) {
       const data = (await res.json()) as CheckoutConfig;
       return {
-        paymentUrl:
-          data.paymentUrl?.trim() ||
-          process.env.NEXT_PUBLIC_YOOKASSA_PAYMENT_URL?.trim(),
+        createUrl:
+          data.createUrl?.trim() ||
+          process.env.NEXT_PUBLIC_YOOKASSA_CREATE_URL?.trim(),
         claimUrl:
           data.claimUrl?.trim() ||
           process.env.NEXT_PUBLIC_CLAIM_URL?.trim(),
+        paymentUrl:
+          data.paymentUrl?.trim() ||
+          process.env.NEXT_PUBLIC_YOOKASSA_PAYMENT_URL?.trim(),
       };
     }
   } catch {
@@ -29,35 +32,71 @@ async function loadCheckoutConfig(): Promise<CheckoutConfig> {
   }
 
   return {
-    paymentUrl: process.env.NEXT_PUBLIC_YOOKASSA_PAYMENT_URL?.trim(),
+    createUrl: process.env.NEXT_PUBLIC_YOOKASSA_CREATE_URL?.trim(),
     claimUrl: process.env.NEXT_PUBLIC_CLAIM_URL?.trim(),
+    paymentUrl: process.env.NEXT_PUBLIC_YOOKASSA_PAYMENT_URL?.trim(),
   };
 }
 
 type Props = {
   disabled?: boolean;
+  email?: string;
   marketingConsent?: boolean;
 };
 
 export default function NeurobookBuyButton({
   disabled = false,
+  email = "",
   marketingConsent = false,
 }: Props) {
   const [loading, setLoading] = useState(false);
 
   async function onBuy() {
     if (disabled || loading) return;
-    void marketingConsent;
 
     setLoading(true);
     try {
       const cfg = await loadCheckoutConfig();
-      const paymentUrl = cfg.paymentUrl?.trim();
-      if (!paymentUrl || paymentUrl.includes("PASTE_")) {
-        alert("Ссылка на оплату не задана в public/checkout.json");
+      const createUrl = cfg.createUrl?.trim();
+
+      if (!createUrl || createUrl.includes("PASTE_")) {
+        alert(
+          "Не задан createUrl в public/checkout.json (адрес backend …/api/yookassa/create)."
+        );
         return;
       }
-      window.location.assign(paymentUrl);
+
+      if (!email) {
+        alert("Укажите email для получения Нейробука.");
+        return;
+      }
+
+      const res = await fetch(createUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          marketingConsent,
+        }),
+      });
+
+      const data = (await res.json().catch(() => ({}))) as {
+        confirmation_url?: string;
+        error?: string;
+      };
+
+      if (!res.ok) {
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+      if (!data.confirmation_url) {
+        throw new Error("Сервер не вернул ссылку на оплату.");
+      }
+
+      window.location.assign(data.confirmation_url);
+    } catch (e) {
+      const msg =
+        e instanceof Error ? e.message : "Не удалось создать платёж.";
+      alert(msg);
     } finally {
       setLoading(false);
     }
@@ -70,7 +109,7 @@ export default function NeurobookBuyButton({
       disabled={disabled || loading}
       className="bg-accent text-white px-6 py-3.5 rounded-lg font-medium w-full md:w-auto text-center inline-flex flex-col items-center justify-center shrink-0 hover:opacity-90 transition-opacity disabled:opacity-70 disabled:cursor-not-allowed"
     >
-      <span>{loading ? "Переходим к оплате..." : "Купить Нейробук"}</span>
+      <span>{loading ? "Создаём оплату..." : "Купить Нейробук"}</span>
       <span className="text-sm font-normal opacity-90">490&nbsp;₽</span>
     </button>
   );

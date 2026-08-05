@@ -6,6 +6,9 @@
   "scripts": {
     "start": "node index.js"
   },
+  "dependencies": {
+    "nodemailer": "^9.0.4"
+  },
   "engines": {
     "node": ">=18"
   }
