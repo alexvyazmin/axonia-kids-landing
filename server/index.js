@@ -100,10 +100,13 @@ function getAuthHeader() {
 }
 
 async function sendEmail(to, subject, text) {
-  if (!to) return;
+  if (!to) {
+    throw new Error("Email получателя пустой");
+  }
   if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) {
-    console.warn("SMTP not configured. Skip email to:", to);
-    return;
+    throw new Error(
+      "SMTP не настроен: задайте SMTP_HOST, SMTP_USER, SMTP_PASS (и SMTP_PORT, EMAIL_FROM)"
+    );
   }
 
   const transporter = nodemailer.createTransport({
