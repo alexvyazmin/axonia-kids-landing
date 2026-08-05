@@ -8,16 +8,20 @@ type CheckoutConfig = {
 };
 
 async function loadCheckoutConfig(): Promise<CheckoutConfig> {
-  const fromEnvPayment = process.env.NEXT_PUBLIC_YOOKASSA_PAYMENT_URL?.trim();
-  const fromEnvClaim = process.env.NEXT_PUBLIC_CLAIM_URL?.trim();
-
+  // checkout.json — источник правды (можно менять без пересборки env)
   try {
-    const res = await fetch("/checkout.json", { cache: "no-store" });
+    const res = await fetch(`/checkout.json?t=${Date.now()}`, {
+      cache: "no-store",
+    });
     if (res.ok) {
       const data = (await res.json()) as CheckoutConfig;
       return {
-        paymentUrl: fromEnvPayment || data.paymentUrl,
-        claimUrl: fromEnvClaim || data.claimUrl,
+        paymentUrl:
+          data.paymentUrl?.trim() ||
+          process.env.NEXT_PUBLIC_YOOKASSA_PAYMENT_URL?.trim(),
+        claimUrl:
+          data.claimUrl?.trim() ||
+          process.env.NEXT_PUBLIC_CLAIM_URL?.trim(),
       };
     }
   } catch {
@@ -25,8 +29,8 @@ async function loadCheckoutConfig(): Promise<CheckoutConfig> {
   }
 
   return {
-    paymentUrl: fromEnvPayment,
-    claimUrl: fromEnvClaim,
+    paymentUrl: process.env.NEXT_PUBLIC_YOOKASSA_PAYMENT_URL?.trim(),
+    claimUrl: process.env.NEXT_PUBLIC_CLAIM_URL?.trim(),
   };
 }
 
