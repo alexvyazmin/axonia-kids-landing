@@ -3,8 +3,10 @@ const { URL } = require("url");
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
+const os = require("os");
 
-const PORT = process.env.PORT || 3001;
+// Timeweb / Docker обычно прокидывают PORT=3000
+const PORT = Number(process.env.PORT) || 3000;
 const HOST = "0.0.0.0";
 
 const YOOKASSA_SHOP_ID = process.env.YOOKASSA_SHOP_ID;
@@ -12,27 +14,41 @@ const YOOKASSA_SECRET_KEY = process.env.YOOKASSA_SECRET_KEY;
 const YOOKASSA_API_BASE = "https://api.yookassa.ru/v3";
 
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "https://kids.axonia.ru";
-const PUBLIC_BASE_URL = (process.env.PUBLIC_BASE_URL || `http://localhost:${PORT}`).replace(
-  /\/$/,
-  ""
-);
+const PUBLIC_BASE_URL = (
+  process.env.PUBLIC_BASE_URL || `http://127.0.0.1:${PORT}`
+).replace(/\/$/, "");
 
 const PDF_PATH = path.join(__dirname, "private", "neurobook.pdf");
-const DATA_DIR = path.join(__dirname, "data");
+
+// В контейнере запись в репозиторий может быть запрещена — используем /tmp
+const DATA_DIR =
+  process.env.DATA_DIR || path.join(os.tmpdir(), "axonia-kids-data");
 const PAYMENTS_FILE = path.join(DATA_DIR, "payments.json");
 const TOKENS_FILE = path.join(DATA_DIR, "tokens.json");
 
-const TOKEN_TTL_MS = 1000 * 60 * 60 * 24; // 24h
+const TOKEN_TTL_MS = 1000 * 60 * 60 * 24;
 const MAX_DOWNLOADS_PER_TOKEN = 3;
 
+/** @type {{ payments: any[], tokens: any[] }} */
+const memory = { payments: [], tokens: [] };
+let useMemoryOnly = false;
+
 function ensureDataFiles() {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-  if (!fs.existsSync(PAYMENTS_FILE)) fs.writeFileSync(PAYMENTS_FILE, "[]");
-  if (!fs.existsSync(TOKENS_FILE)) fs.writeFileSync(TOKENS_FILE, "[]");
+  try {
+    if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+    if (!fs.existsSync(PAYMENTS_FILE)) fs.writeFileSync(PAYMENTS_FILE, "[]");
+    if (!fs.existsSync(TOKENS_FILE)) fs.writeFileSync(TOKENS_FILE, "[]");
+    useMemoryOnly = false;
+  } catch (e) {
+    console.warn("Writable data dir unavailable, using memory store:", e.message);
+    useMemoryOnly = true;
+  }
 }
 
 function readStore(file) {
-  ensureDataFiles();
+  if (useMemoryOnly) {
+    return file === PAYMENTS_FILE ? memory.payments : memory.tokens;
+  }
   try {
     return JSON.parse(fs.readFileSync(file, "utf8"));
   } catch {
@@ -41,7 +57,11 @@ function readStore(file) {
 }
 
 function writeStore(file, data) {
-  ensureDataFiles();
+  if (useMemoryOnly) {
+    if (file === PAYMENTS_FILE) memory.payments = data;
+    else memory.tokens = data;
+    return;
+  }
   fs.writeFileSync(file, JSON.stringify(data, null, 2));
 }
 
@@ -86,6 +106,15 @@ function sendJson(res, status, obj) {
     ...corsHeaders(),
   });
   res.end(JSON.stringify(obj));
+}
+
+function healthPayload() {
+  return {
+    ok: true,
+    pdf: fs.existsSync(PDF_PATH),
+    port: PORT,
+    memoryStore: useMemoryOnly,
+  };
 }
 
 async function yooKassaRequest(apiPath, { method = "GET", body, headers = {} } = {}) {
@@ -157,7 +186,6 @@ async function handleWebhook(req, res) {
   }
 
   const paymentId = body.object.id;
-  // Verify against YooKassa API (anti-spoof)
   const payment = await yooKassaRequest(`/payments/${paymentId}`);
 
   upsertPayment({
@@ -192,7 +220,6 @@ async function handleClaim(req, res) {
   if (paymentId) {
     payment = await yooKassaRequest(`/payments/${paymentId}`);
   } else {
-    // Lookup recent local succeeded payments by email (filled via webhook)
     const list = readStore(PAYMENTS_FILE)
       .filter((p) => p.status === "succeeded" && p.email)
       .filter((p) => String(p.email).toLowerCase() === email)
@@ -215,7 +242,6 @@ async function handleClaim(req, res) {
     });
   }
 
-  // Optional: only allow expected product amount
   const value = payment?.amount?.value;
   if (value && Number(value) < 490) {
     return sendJson(res, 403, { error: "Сумма платежа не соответствует товару." });
@@ -280,7 +306,7 @@ function handleDownload(req, res, parsed) {
 
 const server = http.createServer(async (req, res) => {
   try {
-    const parsed = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+    const parsed = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
     const pathname = parsed.pathname;
 
     if (req.method === "OPTIONS") {
@@ -289,11 +315,12 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    if (req.method === "GET" && pathname === "/health") {
-      return sendJson(res, 200, {
-        ok: true,
-        pdf: fs.existsSync(PDF_PATH),
-      });
+    // Timeweb healthcheck часто бьёт в "/" — обязательно 200
+    if (
+      req.method === "GET" &&
+      (pathname === "/" || pathname === "/health" || pathname === "/healthz")
+    ) {
+      return sendJson(res, 200, healthPayload());
     }
 
     if (req.method === "POST" && pathname === "/api/yookassa/webhook") {
@@ -311,7 +338,10 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8", ...corsHeaders() });
+    res.writeHead(404, {
+      "Content-Type": "text/plain; charset=utf-8",
+      ...corsHeaders(),
+    });
     res.end("Not Found");
   } catch (e) {
     console.error(e);
@@ -320,8 +350,17 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+process.on("uncaughtException", (err) => {
+  console.error("uncaughtException", err);
+});
+process.on("unhandledRejection", (err) => {
+  console.error("unhandledRejection", err);
+});
+
 ensureDataFiles();
+
 server.listen(PORT, HOST, () => {
-  console.log(`Download backend on http://${HOST}:${PORT}`);
-  console.log(`PDF present: ${fs.existsSync(PDF_PATH)}`);
+  console.log(`Download backend listening on http://${HOST}:${PORT}`);
+  console.log(`PDF present: ${fs.existsSync(PDF_PATH)} path=${PDF_PATH}`);
+  console.log(`DATA_DIR=${DATA_DIR} memoryOnly=${useMemoryOnly}`);
 });
