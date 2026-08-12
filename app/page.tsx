@@ -3,7 +3,6 @@ import LongreadImage from "./components/LongreadImage";
 import PurchaseBlock from "./components/PurchaseBlock";
 import ReadingProgress from "./components/ReadingProgress";
 import RevealSection from "./components/RevealSection";
-import SectionMark from "./components/SectionMark";
 
 export default function Home() {
   return (
@@ -13,14 +12,13 @@ export default function Home() {
     <RevealSection className="bg-milky" eager>
       <div className="max-w-prose mx-auto px-4 py-10 md:py-14 space-y-6">
         <Image
-          src="/axonia_kids.webp"
-          alt="Нейробук Axonia Kids"
+          src="/picture_of_mom_and_son.webp"
+          alt="Мама и сын"
           width={1200}
           height={800}
           priority
           className="w-full h-auto rounded-lg"
         />
-        <SectionMark kind="load" />
         <h1>Вы устали не от ребенка. Вы устали помнить всё за всех.</h1>
 
         <p>Кажется, что вы просто мама своего ребенка.</p>
@@ -193,7 +191,6 @@ export default function Home() {
 
     <RevealSection className="bg-sand">
       <div className="max-w-prose mx-auto px-4 py-10 md:py-14 space-y-6">
-        <SectionMark kind="develop" />
         <h2>
           Вы не обязаны ежедневно придумывать, как &laquo;развивать&raquo;
           ребенка.
@@ -333,7 +330,6 @@ export default function Home() {
 
     <RevealSection className="bg-milky">
       <div className="max-w-prose mx-auto px-4 py-10 md:py-14 space-y-6">
-        <SectionMark kind="together" />
         <h2>
           Мозгу ребенка не нужен аниматор. Ему нужен взрослый рядом на 15 минут.
         </h2>
@@ -349,12 +345,6 @@ export default function Home() {
         <p>Поэтому многие вообще не начинают.</p>
         <p>Потому что час свободного времени появляется редко.</p>
         <p>Полтора часа — почти никогда.</p>
-
-        <LongreadImage
-          src="/calendar-play-15min.webp"
-          alt="Календарь с отмеченной игрой — достаточно пятнадцати минут осознанного присутствия"
-        />
-
         <p>
           А между тем мозг ребенка не измеряет любовь количеством проведенных
           занятий.
@@ -405,12 +395,16 @@ export default function Home() {
         <p>
           Есть только одно небольшое действие, которое уже выбрано за вас.
         </p>
+
+        <LongreadImage
+          src="/calendar-play-15min.webp"
+          alt="Расписание дня с выделенными пятнадцатью минутами на игру"
+        />
       </div>
     </RevealSection>
 
     <RevealSection className="bg-sand">
       <div className="max-w-prose mx-auto px-4 py-10 md:py-14 space-y-6">
-        <SectionMark kind="book" />
         <h2>
           Нейробук — когда вам больше не нужно думать, что делать сегодня.
         </h2>
@@ -488,7 +482,6 @@ export default function Home() {
 
     <RevealSection className="bg-milky">
       <div className="max-w-prose mx-auto px-4 py-10 md:py-14 space-y-6">
-        <SectionMark kind="duty" />
         <h2>
           Через 15 минут заканчивается игра. Заканчивается и чувство долга.
         </h2>
@@ -617,7 +610,6 @@ export default function Home() {
 
     <RevealSection className="bg-sand">
       <div className="max-w-prose mx-auto px-4 py-10 md:py-14 space-y-6">
-        <SectionMark kind="race" />
         <h2>Перестаньте участвовать в гонке, которую невозможно выиграть.</h2>
 
         <p>
