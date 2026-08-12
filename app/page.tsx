@@ -1,4 +1,5 @@
 import Image from "next/image";
+import LongreadImage from "./components/LongreadImage";
 import PurchaseBlock from "./components/PurchaseBlock";
 import ReadingProgress from "./components/ReadingProgress";
 import RevealSection from "./components/RevealSection";
@@ -34,6 +35,12 @@ export default function Home() {
         <p>
           Даже когда вы сидите на диване, ваш мозг продолжает перебирать задачи.
         </p>
+
+        <LongreadImage
+          src="/tired-mom-couch.webp"
+          alt="Уставшая мама сидит на диване — невидимая умственная нагрузка не отпускает"
+        />
+
         <p>Нужно заказать новые кроссовки.</p>
         <p>Записаться к стоматологу.</p>
         <p>Не забыть про утренник.</p>
@@ -252,6 +259,11 @@ export default function Home() {
           <p>«Какое упражнение сейчас считается самым полезным?»</p>
         </blockquote>
 
+        <LongreadImage
+          src="/mom-dinosaur-costume.webp"
+          alt="Мама в костюме динозавра — бесконечный поиск занятий превращает родительство в спектакль"
+        />
+
         <p>
           Кажется, что если найти еще один набор, еще одну книгу, еще одну
           методику, тревога наконец исчезнет.
@@ -337,6 +349,12 @@ export default function Home() {
         <p>Поэтому многие вообще не начинают.</p>
         <p>Потому что час свободного времени появляется редко.</p>
         <p>Полтора часа — почти никогда.</p>
+
+        <LongreadImage
+          src="/calendar-play-15min.webp"
+          alt="Календарь с отмеченной игрой — достаточно пятнадцати минут осознанного присутствия"
+        />
+
         <p>
           А между тем мозг ребенка не измеряет любовь количеством проведенных
           занятий.
@@ -696,6 +714,12 @@ export default function Home() {
         <p>
           Разрешение закончить сегодняшний день без чувства вины.
         </p>
+
+        <LongreadImage
+          src="/mom-bath-rest.webp"
+          alt="Спокойная мама в ванной — день можно закончить без чувства долга"
+        />
+
         <p>
           Возможно, именно ради этого и стоит открыть первую страницу.
         </p>
