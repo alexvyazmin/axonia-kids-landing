@@ -6,6 +6,15 @@ const path = require("path");
 const os = require("os");
 const nodemailer = require("nodemailer");
 
+// ---- Diagnostics: env keys at startup (no values) ----
+const envKeys = Object.keys(process.env);
+console.log("[env] process.env keys:", envKeys);
+if (!envKeys.includes("SMTP_PASS")) {
+  console.error(
+    "КРИТИЧЕСКАЯ ОШИБКА: SMTP_PASS не найден в окружении при старте!"
+  );
+}
+
 // Timeweb / Docker обычно прокидывают PORT=3000
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = "0.0.0.0";
