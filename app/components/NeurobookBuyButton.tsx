@@ -20,8 +20,7 @@ async function loadCheckoutConfig(): Promise<CheckoutConfig> {
           data.createUrl?.trim() ||
           process.env.NEXT_PUBLIC_YOOKASSA_CREATE_URL?.trim(),
         claimUrl:
-          data.claimUrl?.trim() ||
-          process.env.NEXT_PUBLIC_CLAIM_URL?.trim(),
+          data.claimUrl?.trim() || process.env.NEXT_PUBLIC_CLAIM_URL?.trim(),
         paymentUrl:
           data.paymentUrl?.trim() ||
           process.env.NEXT_PUBLIC_YOOKASSA_PAYMENT_URL?.trim(),
@@ -107,10 +106,9 @@ export default function NeurobookBuyButton({
       type="button"
       onClick={onBuy}
       disabled={disabled || loading}
-      className="bg-accent text-white px-6 py-3.5 rounded-lg font-medium w-full md:w-auto text-center inline-flex flex-col items-center justify-center shrink-0 hover:opacity-90 transition-opacity disabled:opacity-70 disabled:cursor-not-allowed"
+      className="w-full rounded-xl bg-accent px-6 py-4 text-center text-base font-semibold text-white shadow-[0_8px_20px_rgba(196,92,62,0.28)] transition duration-200 hover:scale-[1.015] hover:bg-[#b04e33] hover:shadow-[0_10px_24px_rgba(196,92,62,0.36)] active:scale-[0.985] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-55 disabled:hover:scale-100 disabled:hover:bg-accent disabled:hover:shadow-[0_8px_20px_rgba(196,92,62,0.28)]"
     >
-      <span>{loading ? "Создаём оплату..." : "Купить Нейробук"}</span>
-      <span className="text-sm font-normal opacity-90">490&nbsp;₽</span>
+      {loading ? "Создаём оплату..." : "Купить Нейробук • 490 ₽"}
     </button>
   );
 }
