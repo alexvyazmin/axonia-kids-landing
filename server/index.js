@@ -36,7 +36,6 @@ const SMTP_PASS = process.env.SMTP_PASS;
 const EMAIL_FROM = process.env.EMAIL_FROM || "hello@axonia.ru";
 const EMAIL_SUBJECT = process.env.EMAIL_SUBJECT || "Ваш Нейробук Axonia Kids";
 
-// Сумма платежа (для теста можно PAYMENT_AMOUNT=1)
 const PAYMENT_AMOUNT = Number(process.env.PAYMENT_AMOUNT || "490").toFixed(2);
 const RETURN_URL =
   process.env.RETURN_URL || "https://kids.axonia.ru/success/";
@@ -248,9 +247,7 @@ async function handleCreatePayment(req, res) {
     return sendJson(res, 400, { error: "Укажите корректный email." });
   }
 
-  const amountValue = body.amountValue
-    ? Number(body.amountValue).toFixed(2)
-    : PAYMENT_AMOUNT;
+  const amountValue = PAYMENT_AMOUNT;
 
   const paymentBody = {
     amount: {
