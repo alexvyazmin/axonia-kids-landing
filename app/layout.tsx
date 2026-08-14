@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { LegalFooter, LegalProvider } from "./components/LegalProvider";
+import YandexMetrika from "./components/YandexMetrika";
 
 export const metadata: Metadata = {
   title: "Нейробук Axonia Kids — 15 минут в день без лишних решений",
@@ -26,6 +27,7 @@ export default function RootLayout({
   return (
     <html lang="ru">
       <body className="bg-milky text-slate-dark antialiased">
+        <YandexMetrika />
         <LegalProvider>
           {children}
           <LegalFooter />
